@@ -1,0 +1,127 @@
+---
+title: "API users and tokens"
+description: "How to create machine accounts and long-lived Bearer tokens for service-to-service authentication."
+---
+
+API users are machine accounts used for service-to-service authentication. Unlike human users, API users do not sign in interactively — they authenticate using long-lived Bearer tokens issued directly in Signon.
+
+Use API users when one application needs to call another application's API on its own behalf, rather than on behalf of a human user.
+
+## Creating an API user
+
+You need the **Superadmin** role to create API users.
+
+<Steps>
+  <Step title="Open API Users">
+    Click **API Users** in the top navigation.
+  </Step>
+  <Step title="Click 'Create API User'">
+    Click the **Create API User** button.
+  </Step>
+  <Step title="Fill in name and email">
+    Enter a descriptive name (for example, `Content Store`) and a service email address. The email must be unique in Signon. It does not need to be a real mailbox — a placeholder address is acceptable.
+  </Step>
+  <Step title="Save">
+    Click **Create API User**. You are taken to the API user's edit page.
+  </Step>
+</Steps>
+
+## Creating an access token
+
+An access token ties an API user to a specific application. The API user presents this token as a Bearer token to authenticate requests to that application.
+
+<Steps>
+  <Step title="Open the API user">
+    Go to **API Users** and click the API user's name, then click **Manage tokens**.
+  </Step>
+  <Step title="Click 'Add application token'">
+    Click **Add application token**.
+  </Step>
+  <Step title="Select the application">
+    Choose the application this token should grant access to from the dropdown.
+  </Step>
+  <Step title="Click 'Create access token'">
+    Click **Create access token**.
+  </Step>
+  <Step title="Copy the token immediately">
+    The token is displayed once. Copy it now and store it securely.
+  </Step>
+</Steps>
+
+<Warning>
+The access token is shown only once, immediately after creation. If you close the page without copying it, you will need to revoke the old token and create a new one.
+</Warning>
+
+Signon also automatically grants the API user the `signin` permission for the selected application when you create the token.
+
+## Token lifetime
+
+Tokens are issued with a lifetime of **2 years**. Signon monitors expiry and will alert you before a token expires so you can rotate it in advance.
+
+## Using a token
+
+Pass the token as a Bearer token in the `Authorization` header of each request:
+
+```shell
+curl --location --globoff \
+  'https://SIGNON_DOMAIN/api/users?uuids[]=c514c7e0-a049-013d-c537-3209197caa3b' \
+  --header 'Authorization: Bearer YOUR_BEARER_TOKEN'
+```
+
+The receiving application validates the token against Signon using Doorkeeper and then looks up the resource owner to determine the API user's permissions.
+
+## Managing tokens
+
+The **Manage tokens** page for an API user lists all active (non-revoked) tokens, grouped by application.
+
+### Revoking a token
+
+<Steps>
+  <Step title="Open Manage tokens">
+    Go to **API Users**, click the user's name, then click **Manage tokens**.
+  </Step>
+  <Step title="Revoke the token">
+    Click **Revoke** next to the token you want to invalidate. Revocation is immediate — the token can no longer be used to authenticate.
+  </Step>
+</Steps>
+
+Revoking a token does not delete the API user or remove its permissions. You can create a new token for the same application afterwards.
+
+## Token renewal
+
+When a token is approaching expiry, rotate it by:
+
+1. Creating a new token for the same application.
+2. Updating the token in all places it is consumed (see [Synchronising tokens with Kubernetes secrets](#synchronising-tokens-with-kubernetes-secrets)).
+3. Revoking the old token once the new one is confirmed to be working.
+
+## Setting up the "Signon API" application
+
+The Signon user API (`GET /api/users`) requires a dedicated application called **Signon API** registered as `api_only`. Create it with:
+
+```bash
+rake applications:create \
+  name="Signon API" \
+  description="API endpoints for user management in Signon" \
+  home_uri="https://signon.example.gov.uk" \
+  redirect_uri="https://signon.example.gov.uk" \
+  api_only="true"
+```
+
+Then create an API user in the Signon UI and grant them a token for the Signon API application. Use that token in the `Authorization` header when calling `/api/users`.
+
+## Synchronising tokens with Kubernetes secrets
+
+On GOV.UK's Kubernetes platform, access tokens are stored as Kubernetes secrets and consumed by applications as environment variables. After creating or rotating a token you need to:
+
+1. [Synchronise the token with Kubernetes secrets](https://docs.publishing.service.gov.uk/manual/alerts/signon-api-user-token-expires-soon.html#2-update-the-token-in-the-secrets-used-by-the-consuming-application)
+2. Expose the token as an environment variable in `govuk-helm-charts`
+
+<CardGroup cols={2}>
+  <Card title="Registering applications" href="/applications/registering-applications">
+    Register an OAuth client application in Signon.
+  </Card>
+  <Card title="Application permissions" href="/applications/permissions">
+    Define and grant permissions for an application.
+  </Card>
+</CardGroup>

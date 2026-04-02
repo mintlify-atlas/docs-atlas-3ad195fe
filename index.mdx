@@ -1,97 +1,63 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Signon"
+description: "The centralised single sign-on service for GOV.UK — manage users, applications, and permissions across the publishing platform."
 ---
 
-## Setting up
+Signon is the identity and access management service that powers GOV.UK publishing. It provides OAuth2-based single sign-on, two-step verification, and fine-grained permission management for all GOV.UK applications.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book-open" href="/introduction">
+    Learn what Signon is, how it works, and how it fits into the GOV.UK publishing platform.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Register your application and get your first users authenticated in minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="User management" icon="users" href="/user-management/users-and-roles">
+    Invite users, assign roles, manage two-step verification, and handle suspensions.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API reference" icon="code" href="/api/overview">
+    Look up users by UUID and integrate with the Signon REST API.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How Signon works
 
-Everything you need to create world-class documentation.
+Signon sits at the centre of GOV.UK's publishing infrastructure. Applications delegate authentication and authorisation to Signon via OAuth2, and Signon returns user identity and permission data to each application.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Register your application">
+    Add your application to Signon using the `applications:create` rake task to receive a client ID and secret.
+  </Step>
+  <Step title="Configure OAuth credentials">
+    Set the `OAUTH_ID` and `OAUTH_SECRET` environment variables in your application using the credentials returned by Signon.
+  </Step>
+  <Step title="Invite users">
+    Create user accounts in Signon and grant them the `signin` permission for your application.
+  </Step>
+  <Step title="Users authenticate">
+    Users visit your application, are redirected to Signon to sign in, and return with a valid session and their permissions.
+  </Step>
+</Steps>
 
-## Need inspiration?
+## Key features
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="OAuth2 single sign-on" icon="shield-check" href="/oauth/overview">
+    Authorization Code flow for end-users and Bearer token flow for API clients, built on Doorkeeper.
+  </Card>
+  <Card title="Two-step verification" icon="mobile-screen" href="/user-management/two-step-verification">
+    TOTP-based 2SV with per-organisation enforcement and admin-controlled exemptions.
+  </Card>
+  <Card title="Role-based access" icon="user-shield" href="/user-management/users-and-roles">
+    Superadmin, Admin, Organisation Admin, and User roles with delegated permission management.
+  </Card>
+  <Card title="Application permissions" icon="key" href="/applications/permissions">
+    Grant and revoke per-application permissions including custom delegated permissions.
+  </Card>
+  <Card title="API user tokens" icon="terminal" href="/applications/api-users-and-tokens">
+    Create API users and Bearer tokens for service-to-service authentication.
+  </Card>
+  <Card title="Batch invitations" icon="envelope" href="/user-management/invitations">
+    Invite multiple users at once with pre-assigned application access and permissions.
+  </Card>
+</CardGroup>

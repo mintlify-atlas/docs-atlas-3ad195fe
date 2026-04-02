@@ -1,0 +1,111 @@
+---
+title: "Registering applications"
+description: "How to register a GOV.UK publishing application with Signon, manage its settings, and review user access."
+---
+
+Every application that wants to use Signon for sign-on must be registered as an OAuth client. Registration creates the credentials the application uses to identify itself during the OAuth2 flow.
+
+## Creating an application
+
+Use the `applications:create` rake task to register a new application. Run it from the Signon application directory:
+
+```bash
+rake applications:create \
+  name=ClientName \
+  description="What this app does" \
+  home_uri="https://myapp.example.gov.uk" \
+  redirect_uri="https://myapp.example.gov.uk/auth/gds/callback"
+```
+
+The task prints the generated `client_id` and `client_secret`. Store these securely — for example, in your application's environment variables or a secrets manager.
+
+<Warning>
+The `client_secret` is only shown once at creation time. If you lose it you will need to regenerate it from the application edit screen.
+</Warning>
+
+### Parameters
+
+| Parameter | Required | Description |
+|---|---|---|
+| `name` | Yes | Display name for the application. Must be unique. |
+| `description` | Yes | Short description shown in the Signon UI. |
+| `home_uri` | Yes | The root URL of the application, used for navigation links. |
+| `redirect_uri` | Yes | The OAuth2 callback URL Signon redirects to after authorisation. |
+| `api_only` | No | Set to `true` for machine-to-machine applications that never have interactive users. |
+
+### API-only applications
+
+Applications that only receive Bearer token requests (no browser-based OAuth flow) should be created with `api_only=true`:
+
+```bash
+rake applications:create \
+  name="Signon API" \
+  description="API endpoints for user management in Signon" \
+  home_uri="https://signon.example.gov.uk" \
+  redirect_uri="https://signon.example.gov.uk" \
+  api_only="true"
+```
+
+API-only applications are excluded from the standard sign-in flow and do not appear as applications users can sign in to.
+
+## Managing applications in the UI
+
+After creation, applications can be managed under **Administer Applications** in the navigation menu. Only users with the **Superadmin** role can access this area.
+
+### Editing application details
+
+<Steps>
+  <Step title="Open Administer Applications">
+    Click **Administer Applications** in the top navigation.
+  </Step>
+  <Step title="Select the application">
+    Find the application in the list and click **Edit**.
+  </Step>
+  <Step title="Update the fields">
+    You can change the application's name, description, home URI, and redirect URI. Click **Save** when done.
+  </Step>
+</Steps>
+
+### Retiring an application
+
+Retiring an application prevents new OAuth tokens from being issued and hides the application from most views, but preserves its data and existing permissions. Use this when an application is being decommissioned but data retention is required.
+
+To retire an application, tick the **Retired** checkbox on the edit screen and save.
+
+<Note>
+Retiring is reversible. Deleting an application removes it permanently, including all associated permissions and access records. Prefer retiring over deleting unless you are certain the data is no longer needed.
+</Note>
+
+## Viewing users with access
+
+To see which users have been granted access (the `signin` permission) to an application:
+
+<Steps>
+  <Step title="Open the application">
+    Go to **Administer Applications** and select the application.
+  </Step>
+  <Step title="Click 'Users with access'">
+    This shows a paginated list of users who hold the `signin` permission for the application.
+  </Step>
+</Steps>
+
+## Access logs and statistics
+
+Signon records an event each time a user successfully authorises through the OAuth2 flow for an application.
+
+### Access logs
+
+The access log shows individual authorisation events in reverse chronological order. You can filter by month using the **Month** selector. By default, automated "Smokey" test users are excluded; tick **Include Smokey users** to show them.
+
+### Monthly access statistics
+
+The monthly statistics view shows, for each calendar month, the total number of authorisation events and the number of distinct users who authorised. This is useful for understanding application adoption and active user counts over time.
+
+<CardGroup cols={2}>
+  <Card title="Application permissions" href="/applications/permissions">
+    Define and manage the permissions an application supports.
+  </Card>
+  <Card title="API users and tokens" href="/applications/api-users-and-tokens">
+    Create machine accounts and Bearer tokens for service-to-service auth.
+  </Card>
+</CardGroup>

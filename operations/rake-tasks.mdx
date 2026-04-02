@@ -1,0 +1,293 @@
+---
+title: "Rake tasks"
+description: "Reference for all Rake tasks available in Signon, covering application registration, user management, organisation sync, and Kubernetes secrets."
+---
+
+Signon ships with a set of Rake tasks for routine operations. All tasks follow the standard Rails convention and can be run with `bundle exec rake`.
+
+## Running tasks
+
+**Locally:**
+
+```bash
+bundle exec rake <task>
+```
+
+**On a Kubernetes deployment:**
+
+```bash
+kubectl exec -it deploy/signon -- bundle exec rake <task>
+```
+
+<Note>
+  You must [configure your EKS access](https://docs.publishing.service.gov.uk/kubernetes/cheatsheet.html#set-your-aws-environment-and-role) before running `kubectl` commands against a deployed cluster.
+</Note>
+
+---
+
+## Applications
+
+### `applications:create`
+
+Register a new OAuth client application with Signon. This outputs the `oauth_id` and `oauth_secret` that the client application needs.
+
+```bash
+bundle exec rake applications:create \
+  name="My App" \
+  description="What the app does" \
+  home_uri="https://myapp.example.com" \
+  redirect_uri="https://myapp.example.com/auth/gds/callback"
+```
+
+Optional parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `supported_permissions` | Comma-separated list of permission names to register |
+| `api_only` | Set to any non-empty value to mark the app as API-only |
+
+The task prints the generated credentials:
+
+```
+Application 'My App' created.
+
+config.oauth_id     = '<uid>'
+config.oauth_secret = '<secret>'
+```
+
+<Tip>
+  Add these values to the application's environment using your secrets management tooling. For GOV.UK apps, see the [govuk-helm-charts access token guide](https://docs.publishing.service.gov.uk/manual/alerts/signon-api-user-token-expires-soon.html#2-update-the-token-in-the-secrets-used-by-the-consuming-application).
+</Tip>
+
+### `applications:migrate_domain[apps_to_ignore]`
+
+Update the `redirect_uri` and `home_uri` for all registered applications when a domain name changes. Pass a comma-separated list of application names to exclude.
+
+```bash
+OLD_DOMAIN=old.example.com NEW_DOMAIN=new.example.com \
+  bundle exec rake "applications:migrate_domain[App One,App Two]"
+```
+
+---
+
+## Organisations
+
+### `organisations:fetch`
+
+Synchronise the list of organisations and their relationships from Whitehall, which is the canonical source. Signon sets a single parent for any organisation that Whitehall lists under multiple parents (last parent wins).
+
+```bash
+bundle exec rake organisations:fetch
+```
+
+<Note>
+  On deployed environments this task runs nightly. If you need the latest organisations reflected in Signon immediately, run the task manually or make the change in Whitehall and wait for the next scheduled run.
+</Note>
+
+---
+
+## Users
+
+### `users:send_suspension_reminders`
+
+Email users whose accounts are approaching the inactivity suspension threshold, warning them that their account will be suspended.
+
+```bash
+bundle exec rake users:send_suspension_reminders
+```
+
+### `users:suspend_inactive`
+
+Suspend all users who have not signed in within the inactivity threshold period (45 days).
+
+```bash
+bundle exec rake users:suspend_inactive
+```
+
+### `users:suspend`
+
+Suspend a single user account by email address.
+
+```bash
+email=user@example.com bundle exec rake users:suspend
+```
+
+### `users:unsuspend`
+
+Restore a suspended user account.
+
+```bash
+email=user@example.com bundle exec rake users:unsuspend
+```
+
+### `users:push_permissions`
+
+Push each user's permission data to all applications they have access to. Useful after bulk permission changes.
+
+```bash
+bundle exec rake users:push_permissions
+```
+
+### `users:grant_application_access[application]`
+
+Grant signin access to an application for all active and suspended web users who do not already have it.
+
+```bash
+bundle exec rake "users:grant_application_access[My App]"
+```
+
+### `users:revoke_application_access[application]`
+
+Remove all permissions for every user of a given application.
+
+<Warning>
+  This destroys all `UserApplicationPermission` records for the named application. Users will lose access immediately.
+</Warning>
+
+```bash
+bundle exec rake "users:revoke_application_access[My App]"
+```
+
+### `users:grant_application_access_for_org[application,org]`
+
+Grant signin access to an application for all web users in a specific organisation (identified by slug).
+
+```bash
+bundle exec rake "users:grant_application_access_for_org[My App,cabinet-office]"
+```
+
+### `users:migrate_permissions`
+
+Copy permissions from one application to another for all users.
+
+```bash
+SOURCE="Old App" TARGET="New App" bundle exec rake users:migrate_permissions
+```
+
+### `users:set_2sv_by_org[org]`
+
+Enable 2-step verification for all users in an organisation who do not already have it and have no exemption reason.
+
+```bash
+bundle exec rake "users:set_2sv_by_org[cabinet-office]"
+```
+
+### `users:set_2sv_for_org[org]`
+
+Mandate 2-step verification at the organisation level (sets `require_2sv` on the organisation record).
+
+```bash
+bundle exec rake "users:set_2sv_for_org[cabinet-office]"
+```
+
+### `users:set_2sv_by_email_domain[domain]`
+
+Enable 2-step verification for all users whose email address matches the given domain.
+
+```bash
+bundle exec rake "users:set_2sv_by_email_domain[@example.gov.uk]"
+```
+
+### `users:set_2sv_for_org_admins`
+
+Enable 2-step verification for all organisation admin and super-organisation admin users.
+
+```bash
+bundle exec rake users:set_2sv_for_org_admins
+```
+
+### `users:delete_expired_never_signed_in`
+
+Delete web users who were invited at least 90 days ago and have never signed in.
+
+```bash
+bundle exec rake users:delete_expired_never_signed_in
+```
+
+---
+
+## Access tokens
+
+### `access_tokens:renew_expiring_internal_tokens`
+
+Automatically renew OAuth access tokens expiring within one month for internal GOV.UK users (`@alphagov.co.uk` and `@publishing.service.gov.uk` email domains).
+
+```bash
+bundle exec rake access_tokens:renew_expiring_internal_tokens
+```
+
+---
+
+## OAuth access records
+
+### `oauth_access_records:delete_expired`
+
+Delete expired OAuth access grants and access tokens from the database.
+
+```bash
+bundle exec rake oauth_access_records:delete_expired
+```
+
+---
+
+## Kubernetes secrets
+
+### `kubernetes:sync_token_secrets`
+
+Write the current API user bearer tokens to Kubernetes secrets, creating or updating a secret named `signon-token-<user>-<app>` for each active API user authorisation.
+
+```bash
+bundle exec rake kubernetes:sync_token_secrets
+```
+
+### `kubernetes:sync_app_secrets`
+
+Write the OAuth credentials (`oauth_id`, `oauth_secret`) for all non-retired applications to Kubernetes secrets, named `signon-app-<name>`.
+
+```bash
+bundle exec rake kubernetes:sync_app_secrets
+```
+
+---
+
+## Event log
+
+### `event_log:delete_logs_older_than_two_years`
+
+Delete all event log entries that are older than two years. Run this periodically to prevent the `event_logs` table from growing unboundedly.
+
+```bash
+bundle exec rake event_log:delete_logs_older_than_two_years
+```
+
+<Warning>
+  This permanently deletes historical audit log records. Only run this task as part of a planned data retention process.
+</Warning>
+
+---
+
+## Data hygiene
+
+### `data_hygiene:bulk_update_organisation[csv_filename]`
+
+Update the organisation association for multiple users in bulk from a CSV file.
+
+```bash
+bundle exec rake "data_hygiene:bulk_update_organisation[/path/to/users.csv]"
+```
+
+### `data_hygiene:close_organisation[content_id]`
+
+Mark an organisation as closed using its content ID.
+
+```bash
+bundle exec rake "data_hygiene:close_organisation[<content-id>]"
+```
+
+### `data_hygiene:bulk_update_user_organisation[old_content_id,new_content_id]`
+
+Move all users from one organisation to another, identified by content IDs.
+
+```bash
+bundle exec rake "data_hygiene:bulk_update_user_organisation[<old-id>,<new-id>]"
+```

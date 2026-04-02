@@ -1,0 +1,149 @@
+---
+title: "Suspensions and unlocking"
+description: "How automatic and manual suspension works, how to unlock locked accounts, and how to handle password resets."
+---
+
+Signon has two mechanisms that prevent a user from signing in: **suspension** and **locking**. Suspension is a deliberate administrative action (or an automated inactivity process), while locking happens automatically after too many failed authentication attempts.
+
+## Automatic suspension
+
+Signon automatically suspends web users who have not signed in for **45 days**. The `InactiveUsersSuspender` job runs on a schedule and:
+
+1. Finds all non-suspended web users whose last sign-in was before the 45-day threshold.
+2. Sets `suspended_at` to the current time and records a reason in the format: `"User has not logged in for 45 days since <date>"`.
+3. Revokes all active OAuth access tokens for the user.
+4. Sends a suspension notification email to the user.
+5. Records an `ACCOUNT_AUTOSUSPENDED` event in the event log.
+
+Users who were recently unsuspended are excluded from automatic suspension for a **7-day grace period** (`unsuspended_at` must be more than 7 days ago).
+
+<Note>
+Automatic suspension applies to web users only. API users are not subject to inactivity suspension.
+</Note>
+
+## Manual suspension
+
+Admins can suspend a user at any time, for example to immediately revoke access pending an investigation.
+
+<Steps>
+  <Step title="Find the user">
+    Navigate to **Users** and search for the user by name or email.
+  </Step>
+  <Step title="Open the suspension form">
+    Click on the user to open their record, then click **Suspend user**.
+  </Step>
+  <Step title="Enter a reason">
+    Provide a reason for the suspension. This field is mandatory — Signon will not save a suspended account without a `reason_for_suspension`.
+  </Step>
+  <Step title="Confirm the suspension">
+    Click **Suspend**. The user is immediately suspended and cannot sign in. The action is recorded in the event log.
+  </Step>
+</Steps>
+
+<Warning>
+Suspending a user does not log them out of active browser sessions immediately. Their session will expire according to the normal session timeout. OAuth tokens are revoked as part of the suspension process.
+</Warning>
+
+## Unsuspending a user
+
+<Steps>
+  <Step title="Find the user">
+    Navigate to **Users** and filter by status **suspended** to locate the user.
+  </Step>
+  <Step title="Open the suspension form">
+    Click on the user, then click **Unsuspend user**.
+  </Step>
+  <Step title="Confirm the unsuspension">
+    Click **Unsuspend**. The `suspended_at` field is cleared and `unsuspended_at` is set to the current time. The account returns to `active` status.
+  </Step>
+</Steps>
+
+After unsuspension, the 7-day grace period prevents the user from being automatically re-suspended for inactivity. Once the grace period has elapsed, normal inactivity rules apply again.
+
+## Account locking
+
+Accounts are locked automatically after too many failed authentication attempts:
+
+| Trigger | Result |
+| --- | --- |
+| Too many failed **password** attempts | Account locked, reason recorded as `:password` |
+| **10** failed **2SV code** attempts | Account locked, reason recorded as `:two_step` |
+
+A locked account cannot sign in. The user's status shows as `locked` in the Users list.
+
+### Unlocking a locked account
+
+<Steps>
+  <Step title="Find the user">
+    Navigate to **Users** and filter by status **locked**, or search for the user directly.
+  </Step>
+  <Step title="Open the user record">
+    Click on the user to open their record.
+  </Step>
+  <Step title="Unlock the account">
+    Click **Unlock account**. This clears `locked_at` and resets the `second_factor_attempts_count` to zero. The unlock is recorded in the event log.
+  </Step>
+</Steps>
+
+<Tip>
+If the lock was caused by failed 2SV attempts, consider whether the user's authenticator app is set up correctly. You may also need to [reset their 2SV](/user-management/two-step-verification#resetting-a-users-2sv) if they have lost access to their device.
+</Tip>
+
+## Password resets
+
+### User-initiated
+
+A user who has forgotten their password can request a reset from the sign-in page. Signon sends a reset link to their registered email address.
+
+There are two cases where the reset link is **not** sent:
+
+| Condition | What happens |
+| --- | --- |
+| Account is suspended | A notification email is sent explaining that the password reset is not permitted due to suspension. |
+| Invitation not yet accepted | A notification email is sent explaining that the user must accept their invitation first. |
+
+### Admin-initiated
+
+Admins cannot directly set a user's password, but they can trigger a password reset email from the user's record.
+
+<Steps>
+  <Step title="Find the user">
+    Navigate to **Users** and open the user record.
+  </Step>
+  <Step title="Send a password reset email">
+    Click **Send password reset email**. Signon generates a reset token and sends the email immediately.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### User did not receive the password reset email
+
+1. Check that the email address on the account is correct.
+2. Ask the user to check their spam or junk folder.
+3. If the account is suspended or the invitation has not been accepted, a reset email will not be sent — check the account status first.
+4. If the issue persists, an engineer can retrieve the raw reset token from the Rails console and send it via another channel:
+
+```ruby
+user = User.find_by(email: "user@example.gov.uk")
+token = user.send_reset_password_instructions
+# token contains the raw (unhashed) reset token
+# construct the URL: /users/password/edit?reset_password_token=<token>
+```
+
+<Warning>
+Reset tokens should never be shared over insecure channels. Use this approach only as a last resort and ensure the token is transmitted securely.
+</Warning>
+
+### User is locked out after too many 2SV attempts
+
+Unlock the account as described in [Unlocking a locked account](#unlocking-a-locked-account). If the user no longer has access to their authenticator app, also [reset their 2SV](/user-management/two-step-verification#resetting-a-users-2sv) so they are prompted to set it up again on their next sign-in.
+
+<CardGroup cols={2}>
+  <Card title="Two-step verification" href="/user-management/two-step-verification">
+    Resetting 2SV after a lockout caused by failed code attempts.
+  </Card>
+  <Card title="Users and roles" href="/user-management/users-and-roles">
+    User status definitions and how to filter by status.
+  </Card>
+</CardGroup>

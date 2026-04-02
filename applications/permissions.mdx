@@ -1,0 +1,147 @@
+---
+title: "Application permissions"
+description: "How Signon permissions work, how to define them for an application, and how to grant them to users."
+---
+
+Permissions are named capabilities that an application defines and then checks at runtime to control what a user can do. Signon stores which permissions each user holds for each application and returns them to the application via the OAuth `/user` endpoint.
+
+## The `signin` permission
+
+Every application automatically gets a `signin` permission when it is registered. This permission controls whether a user has access to the application at all.
+
+- A user who holds `signin` for an application can complete the OAuth sign-in flow.
+- A user without `signin` cannot sign in to that application, regardless of any other permissions they hold.
+
+The `signin` permission is created as delegated by default (see [Delegated permissions](#delegated-permissions) below).
+
+<Note>
+The name of the `signin` permission cannot be changed after it is created.
+</Note>
+
+## Supported permissions
+
+A supported permission is a permission that an application declares it uses. Only supported permissions can be granted to users.
+
+When a user signs in, Signon returns all permissions the user holds for that application in the `/user` OAuth response:
+
+```json
+{
+  "user": {
+    "uid": "abc123",
+    "name": "Jane Smith",
+    "email": "jane.smith@example.gov.uk",
+    "permissions": ["signin", "editor", "admin"]
+  }
+}
+```
+
+The application is responsible for reading this list and deciding what behaviour to allow.
+
+## Managing supported permissions in the UI
+
+Supported permissions for an application are managed under **Administer Applications → [Application name] → Supported Permissions**. You need the **Superadmin** role to access this area.
+
+### Creating a permission
+
+<Steps>
+  <Step title="Navigate to supported permissions">
+    Go to **Administer Applications**, select the application, and click **Supported Permissions**.
+  </Step>
+  <Step title="Click 'Add permission'">
+    Click **Add permission** to open the new permission form.
+  </Step>
+  <Step title="Fill in the name">
+    Enter a name for the permission. Permission names must be unique within an application.
+  </Step>
+  <Step title="Set delegation and default options">
+    Choose whether the permission should be delegated and whether it should be granted by default to new users. See below for what these options mean.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The permission is now available to grant to users.
+  </Step>
+</Steps>
+
+### Editing a permission
+
+Open the permission from the Supported Permissions list and update its name or delegation status. You cannot rename the `signin` permission.
+
+### Deleting a permission
+
+<Steps>
+  <Step title="Open the permission">
+    Click the permission name in the Supported Permissions list.
+  </Step>
+  <Step title="Click 'Delete'">
+    You will be asked to confirm. Deleting a permission removes it from all users who currently hold it.
+  </Step>
+</Steps>
+
+<Warning>
+Deleting a supported permission immediately removes it from every user who holds it. There is no bulk-restore — you would need to re-grant it to each user individually.
+</Warning>
+
+## Delegated permissions
+
+A permission marked as **delegated** can be granted by publishing managers (users with the **Super organisation admin** or **Organisation admin** role), not just by GOV.UK admins.
+
+When the `signin` permission is delegated, publishing managers can grant or revoke access to that application for users they manage. When a non-`signin` permission is delegated, publishing managers can grant or revoke that specific permission.
+
+Permissions that are not delegated can only be managed by users with the **Superadmin** or **Admin** role.
+
+| Role | Can grant non-delegated | Can grant delegated |
+|---|---|---|
+| Superadmin / Admin | Yes | Yes |
+| Super organisation admin / Organisation admin | No | Yes |
+
+## Granting permissions to users
+
+To grant a permission to a specific user:
+
+<Steps>
+  <Step title="Open the user's profile">
+    Go to **Users**, find the user, and open their profile.
+  </Step>
+  <Step title="Select 'Applications'">
+    Click the **Applications** tab to see the list of applications and the user's current access.
+  </Step>
+  <Step title="Grant access">
+    If the user does not yet have access to the application, click **Grant access**. This grants the `signin` permission.
+  </Step>
+  <Step title="Edit permissions">
+    Once the user has access, click **Edit permissions** next to the application to add or remove individual permissions.
+  </Step>
+</Steps>
+
+<Tip>
+Publishing managers can only see and grant permissions that are marked as delegated. If a permission is missing from their view, a Superadmin needs to either mark it as delegated or grant it directly.
+</Tip>
+
+## How permissions are stored
+
+The permission model uses three key classes:
+
+- **`Doorkeeper::Application`** — represents a registered OAuth application and has many `SupportedPermission` records.
+- **`SupportedPermission`** — represents a single named permission that an application supports. Belongs to a `Doorkeeper::Application`.
+- **`UserApplicationPermission`** — the join record linking a user to a supported permission (and therefore to an application). A user holds a permission when this record exists.
+
+```ruby
+# A user gains access when a UserApplicationPermission is created
+# linking them to the application's signin SupportedPermission.
+user.user_application_permissions
+  .create!(supported_permission: application.signin_permission)
+```
+
+## How permissions reach the application
+
+After a user signs in via OAuth, the client application calls Signon's `/user` endpoint with its access token. Signon looks up all `UserApplicationPermission` records for that user and that application and returns the permission names in the response body. The client application stores and acts on this list.
+
+When a user's permissions change, Signon pushes an updated user object to each registered application via HTTP PUT to `/users/{uid}`, allowing applications to update their local cache immediately.
+
+<CardGroup cols={2}>
+  <Card title="Registering applications" href="/applications/registering-applications">
+    How to register a new OAuth client application.
+  </Card>
+  <Card title="API users and tokens" href="/applications/api-users-and-tokens">
+    Machine accounts and Bearer tokens for service-to-service auth.
+  </Card>
+</CardGroup>

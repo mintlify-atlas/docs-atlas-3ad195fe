@@ -1,0 +1,118 @@
+---
+title: "Environment variables"
+description: "Reference for all environment variables used by Signon, organised by purpose."
+---
+
+Signon reads configuration from environment variables at runtime. The sections below describe each variable, what it controls, and whether it is required.
+
+<Warning>
+Never commit secrets such as encryption keys or API keys to source control. Inject them as Kubernetes secrets or through your secrets management solution.
+</Warning>
+
+## ActiveRecord encryption
+
+Signon uses [ActiveRecord Encryption](https://guides.rubyonrails.org/active_record_encryption.html) to encrypt sensitive columns in the database, such as `User#otp_secret_key` (the TOTP seed used for two-step verification).
+
+Both variables are **required** in all environments.
+
+| Variable | Description |
+|---|---|
+| `ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` | Primary key used to encrypt and decrypt database values. Must be a sufficiently long random string. |
+| `ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT` | Salt used during key derivation. Must be unique per environment. |
+
+```bash
+ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY="<random-secret>"
+ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT="<random-salt>"
+```
+
+<Note>
+Changing these values in a running environment will make previously encrypted data unreadable. Rotate them only as part of a planned key rotation procedure.
+</Note>
+
+## Devise
+
+Signon uses [Devise](https://github.com/plataformatec/devise) and [devise-encryptable](https://github.com/plataformatec/devise-encryptable) for password hashing and session management. These variables are **required** in all environments.
+
+| Variable | Description |
+|---|---|
+| `DEVISE_PEPPER` | Random string appended to passwords before hashing. Changing this value invalidates all existing passwords. |
+| `DEVISE_SECRET_KEY` | Secret key used to sign and verify Devise tokens (for example, password reset tokens). |
+
+```bash
+DEVISE_PEPPER="<random-secret>"
+DEVISE_SECRET_KEY="<random-secret>"
+```
+
+<Warning>
+`DEVISE_PEPPER` and `DEVISE_SECRET_KEY` must remain stable across deployments. Changing either value in production will invalidate all active sessions and password reset tokens.
+</Warning>
+
+## GOV.UK Notify
+
+Signon sends transactional email (invitations, password resets, email change confirmations) via [GOV.UK Notify](https://www.notifications.service.gov.uk/) using the [mail-notify](https://github.com/dxw/mail-notify) gem.
+
+Both variables are **required** for email delivery to work.
+
+| Variable | Description |
+|---|---|
+| `GOVUK_NOTIFY_API_KEY` | API key for the GOV.UK Notify service. Obtain this from the Notify dashboard. |
+| `GOVUK_NOTIFY_TEMPLATE_ID` | ID of the email template to use when sending messages through Notify. |
+
+```bash
+GOVUK_NOTIFY_API_KEY="<notify-api-key>"
+GOVUK_NOTIFY_TEMPLATE_ID="<template-id>"
+```
+
+<Note>
+In development, you can use a Notify test API key (prefixed with `dGVzdC`) to send emails to a test inbox without delivering to real addresses.
+</Note>
+
+## OAuth URI rewriting
+
+Signon can rewrite the URIs registered for OAuth applications using a find-and-replace pattern. This is used in environments where application hostnames follow a predictable pattern, allowing a single registration to work across multiple environments.
+
+These variables are **optional**.
+
+| Variable | Description |
+|---|---|
+| `SIGNON_APPS_URI_SUB_PATTERN` | Regular expression pattern to match in registered OAuth redirect URIs. |
+| `SIGNON_APPS_URI_SUB_REPLACEMENT` | Replacement string to substitute when the pattern matches. Supports capture group references. |
+
+```bash
+SIGNON_APPS_URI_SUB_PATTERN="publishing\.service\.gov\.uk"
+SIGNON_APPS_URI_SUB_REPLACEMENT="integration.publishing.service.gov.uk"
+```
+
+The substitution is applied by `Doorkeeper::Application#substituted_uri` at request time and does not modify the stored URI.
+
+## GOV.UK app domain
+
+Used to configure Google Analytics in Signon's admin layout.
+
+This variable is **optional** but should be set in deployed environments.
+
+| Variable | Description |
+|---|---|
+| `GOVUK_APP_DOMAIN` | The base domain for GOV.UK applications, for example `publishing.service.gov.uk`. Used in the admin layout for analytics configuration. |
+
+```bash
+GOVUK_APP_DOMAIN="publishing.service.gov.uk"
+```
+
+## GOV.UK environment names
+
+Used to configure the [`govuk_admin_template`](https://github.com/alphagov/govuk_admin_template) UI component and to identify expiring API tokens in `Healthcheck::ApiTokens`.
+
+This variable is **optional** but should be set in deployed environments.
+
+| Variable | Description |
+|---|---|
+| `GOVUK_ENVIRONMENT` | The name of the current environment, for example `production`, `staging`, or `integration`. Displayed in the admin UI to help operators identify which environment they are working in. |
+
+```bash
+GOVUK_ENVIRONMENT="integration"
+```
+
+<Tip>
+Setting `GOVUK_ENVIRONMENT` makes it immediately obvious which environment you are viewing in the admin interface, reducing the risk of making changes in the wrong environment.
+</Tip>

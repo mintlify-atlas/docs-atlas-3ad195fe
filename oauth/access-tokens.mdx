@@ -1,0 +1,135 @@
+---
+title: "Access tokens"
+description: "How access tokens are generated, used, and managed in Signon for both end-user sessions and API clients."
+---
+
+Signon issues Bearer tokens that client applications use to authenticate requests. There are two distinct token use cases: **end-user session tokens** obtained through the Authorization Code flow, and **API user tokens** created in advance for service-to-service requests.
+
+## Bearer token authentication
+
+All authenticated requests to Signon's `/user` endpoint must include the access token in the `Authorization` header:
+
+```http
+GET /user HTTP/1.1
+Host: signon.publishing.service.gov.uk
+Authorization: Bearer de6780bc506a0446309bd9362820ba8aed28aa506c71eedbe1c5c4f9dd350e54
+```
+
+<Warning>
+  Never pass access tokens as query parameters. Always use the `Authorization: Bearer` header.
+</Warning>
+
+## Token types
+
+<CardGroup cols={2}>
+  <Card title="End-user session tokens" icon="user">
+    Issued through the Authorization Code flow when a user signs in interactively. Expire after 2 hours. Must be refreshed using the refresh token before expiry.
+  </Card>
+  <Card title="API user tokens" icon="server">
+    Issued in advance through the Signon admin interface for API clients. Used for service-to-service authentication where no human user is present.
+  </Card>
+</CardGroup>
+
+## Token lifetime
+
+Access tokens expire after **7200 seconds (2 hours)**. The `expires_in` value is always included in the token response and must not be ignored.
+
+```json
+{
+  "access_token": "de6780bc506a0446309bd9362820ba8aed28aa506c71eedbe1c5c4f9dd350e54",
+  "token_type": "bearer",
+  "expires_in": 7200,
+  "refresh_token": "8257e65c97202ed1726cf9571600918f3bffb2544b26e00a8a5d5cfe5a04d8",
+  "created_at": 1680000000
+}
+```
+
+<Note>
+  End-user-facing clients must implement token refresh. See [Authorization Code flow](/oauth/authorization-flow#token-expiry-and-refresh) for the refresh token exchange request.
+</Note>
+
+## Token generation
+
+Access tokens, refresh tokens, client IDs, and client secrets are generated using Ruby's `SecureRandom` module as a random hex string of length 32.
+
+Where OpenSSL is available it is used for cryptographic randomness, seeded with the current time and the current process PID:
+
+```ruby
+@pid = 0 if !defined?(@pid)
+pid = $$
+if @pid != pid
+  now = Time.now
+  ary = [now.to_i, now.nsec, @pid, pid]
+  OpenSSL::Random.seed(ary.to_s)
+  @pid = pid
+end
+return OpenSSL::Random.random_bytes(n)
+```
+
+Where OpenSSL is not available, `SecureRandom` falls back to `/dev/urandom`. GDS production servers have OpenSSL available.
+
+## Creating API user tokens
+
+API user tokens allow one application to authenticate to another without a human user in the flow.
+
+<Steps>
+  <Step title="Sign in to Signon with the superadmin role">
+    Only accounts with the `superadmin` role can create API users and tokens.
+  </Step>
+  <Step title="Create an API user">
+    Click **API Users**, then **Create API User**. Provide a name and email address that identify the consuming application.
+  </Step>
+  <Step title="Create an access token">
+    Once saved, click **Add application token**, select the target application, and click **Create access token**.
+
+    <Warning>
+      The token is displayed only once. Copy it immediately — it cannot be retrieved again from the Signon interface.
+    </Warning>
+  </Step>
+  <Step title="Store the token securely">
+    Store the token in a Kubernetes secret and expose it as an environment variable in the consuming application. See the GOV.UK Developer Docs for [synchronising tokens with Kubernetes secrets](https://docs.publishing.service.gov.uk/manual/alerts/signon-api-user-token-expires-soon.html#2-update-the-token-in-the-secrets-used-by-the-consuming-application).
+  </Step>
+</Steps>
+
+## Using a token in a Ruby application
+
+Doorkeeper exposes the current valid token as `doorkeeper_token` rather than `current_user`. To require a valid Bearer token in a controller:
+
+```ruby
+class AutomaticApiController
+  before_action :doorkeeper_authorize!
+
+  def swizzle
+    @token_owning_user = User.find_by_id(doorkeeper_token.resource_owner_id)
+  end
+end
+```
+
+The token's `resource_owner_id` links back to the `User` record that the token was issued for.
+
+## Token revocation
+
+Individual tokens can be revoked through the Signon admin interface under the API user's **Manage tokens** page.
+
+To revoke all tokens for a user — for example when an account is suspended — Signon sends a `POST /users/:uid/reauth` request to each registered application. Applications must invalidate the user's session in response. See [permission synchronisation](/oauth/authorization-flow#permission-synchronisation) for details.
+
+## Legacy endpoint
+
+```http
+POST /oauth/access_token HTTP/1.1
+```
+
+This endpoint is an alias for `POST /oauth/token`, retained for backwards compatibility with OAuth v1 clients. New integrations must use `/oauth/token`.
+
+## Security best practices
+
+<Tip>
+  Follow these practices to keep tokens secure across all environments.
+</Tip>
+
+- **HTTPS only.** Never transmit tokens over plain HTTP. Signon enforces HTTPS redirect URIs in non-development environments.
+- **Header only.** Pass tokens in the `Authorization: Bearer` header. Avoid query parameters where possible, as they appear in server logs and browser history.
+- **Short-lived tokens.** Do not disable token expiry. The 2-hour lifetime limits the window of exposure if a token is compromised.
+- **Secure storage.** Store tokens in environment variables backed by a secrets manager (e.g. Kubernetes secrets). Never commit tokens to source control.
+- **Token rotation.** Rotate API user tokens regularly. Use the Signon admin interface to revoke and replace tokens. Alert infrastructure is configured to warn before tokens expire.
+- **No scopes.** Signon does not use OAuth2 token scopes. Authorisation within each application is controlled through the permission sets stored in Signon.

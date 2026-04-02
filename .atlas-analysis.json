@@ -1,28 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Signon",
+  "projectType": "saas",
+  "projectName": "Signon",
+  "projectDescription": "A centralised OAuth2-based single sign-on service for GOV.UK that provides username/password authentication, two-step verification, and application permission management.",
   "theme": "luma",
-  "colors": {
-    "primary": "#1e75bc",
-    "light": "#8cbcdc",
-    "dark": "#040404"
-  },
-  "favicon": "https://media.brand.dev/1a663760-838b-4568-886b-1f5d1438760c.svg",
-  "logo": {
-    "light": "https://media.brand.dev/f3adbf3a-118b-4cbf-b5fa-afa2bdb05d2f.svg",
-    "dark": "https://media.brand.dev/f3adbf3a-118b-4cbf-b5fa-afa2bdb05d2f.svg"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/alphagov/signon"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/alphagov/signon"
-    }
-  },
+  "primaryColor": "#1e75bc",
+  "lightColor": "#8cbcdc",
+  "darkColor": "#040404",
   "navigation": {
     "tabs": [
       {
@@ -86,5 +69,26 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Centralised OAuth2 single sign-on for GOV.UK services",
+    "Username/password authentication via Devise",
+    "Two-step verification (2SV/TOTP) with mandatory enforcement",
+    "Role-based access control (Superadmin, Admin, Organisation Admin, User)",
+    "Application permission management with delegated permissions",
+    "API user tokens for service-to-service authentication",
+    "Batch user invitations",
+    "Organisation hierarchy management",
+    "Automatic account suspension for inactive users",
+    "Event audit logging"
+  ],
+  "publicApiSurface": [
+    "GET /api/users?uuids[]=<uuid> — Retrieve user details by UUID",
+    "GET /user — OAuth user info endpoint (returns user permissions)",
+    "POST /oauth/authorize — OAuth 2.0 authorization endpoint",
+    "POST /oauth/token — OAuth 2.0 token endpoint",
+    "POST /oauth/access_token — Legacy OAuth v1 compatibility endpoint",
+    "GET /healthcheck/live — Liveness healthcheck",
+    "GET /healthcheck/ready — Readiness healthcheck"
+  ]
 }

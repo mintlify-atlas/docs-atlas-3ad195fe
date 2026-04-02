@@ -1,0 +1,123 @@
+---
+title: "Inviting users"
+description: "How to invite individual users or bulk-invite via CSV, including what happens after an invitation is sent."
+---
+
+New users are onboarded through an invitation flow. Signon sends an email containing a one-time link the invitee uses to set their password and activate their account.
+
+## Who can invite users
+
+Only **GOV.UK admins** (superadmin and admin roles) can send invitations. Publishing managers (super organisation admin and organisation admin) cannot.
+
+<Warning>
+If a publishing manager needs a new user added to their organisation, they must ask a GOV.UK admin to send the invitation.
+</Warning>
+
+## Inviting a single user
+
+<Steps>
+  <Step title="Open the invite form">
+    Navigate to **Users** and click **Invite user**.
+  </Step>
+  <Step title="Enter the user's details">
+    Fill in:
+    - **Name** — the user's full name
+    - **Email** — must be a governmental email address; non-ASCII characters are not permitted
+    - **Role** — the role to assign (only roles at or below your own level are available)
+    - **Organisation** — required for organisation admin role; optional for others
+  </Step>
+  <Step title="Grant application access">
+    Select the applications the user should have access to. For each application, you can also set granular permissions at this stage.
+  </Step>
+  <Step title="Send the invitation">
+    Click **Send invitation email**. Signon creates the user account and sends the invitation email immediately.
+  </Step>
+</Steps>
+
+<Note>
+If a user with that email address already exists, Signon will display an alert and redirect to the existing user record rather than creating a duplicate. You can resend the invitation from there.
+</Note>
+
+### Permissions at invite time
+
+Application access and permissions granted during the invitation are applied immediately to the new user record. You can adjust them afterwards from the user's applications page.
+
+GOV.UK admins can grant access to any application and set any permission. The invitation form only shows applications and permissions the inviting user is authorised to manage.
+
+## Batch invitations
+
+Batch invitations let you invite multiple users at once by uploading a CSV file.
+
+### CSV format
+
+The CSV must include `Name` and `Email` column headers. An optional `Organisation` column sets the organisation slug for each user.
+
+```csv
+Name,Email,Organisation
+Jane Smith,jane.smith@example.gov.uk,cabinet-office
+John Doe,john.doe@example.gov.uk,
+```
+
+<Warning>
+If any row contains an invalid email address, the entire batch is rejected before any invitations are sent. Fix all validation errors and re-upload the file.
+</Warning>
+
+### Sending a batch invitation
+
+<Steps>
+  <Step title="Open the batch invite form">
+    Navigate to **Users** and click **Batch invite users**.
+  </Step>
+  <Step title="Select an organisation">
+    Choose the default organisation for invited users. This is pre-filled with your own organisation if you have one.
+  </Step>
+  <Step title="Upload the CSV">
+    Click **Choose file** and select your CSV. Signon parses the file immediately and validates every row.
+  </Step>
+  <Step title="Set permissions">
+    After the CSV is accepted you are taken to the permissions step, where you can grant application access for all users in the batch.
+  </Step>
+  <Step title="Send invitations">
+    Confirm and submit. Signon queues individual invitation emails for each user in the batch and processes them asynchronously.
+  </Step>
+  <Step title="Check the batch status">
+    Return to the batch invitation detail page to see how many invitations have been sent and whether any failed.
+  </Step>
+</Steps>
+
+## What happens when an invitation is sent
+
+1. Signon creates a user account in the `invited` status.
+2. An invitation email is sent to the address provided. The email contains a one-time link.
+3. When the invitee clicks the link, they are prompted to set a password and (if required) set up 2-step verification.
+4. Once they complete the flow, the account moves to `active` status and `invitation_accepted_at` is recorded.
+
+### Invitation expiry
+
+Accounts that have never signed in expire after **90 days** from the date the invitation was sent. Expired-but-never-signed-in accounts are eligible for automatic deletion by the `expired_not_signed_in_user_deleter` job.
+
+<Note>
+The 90-day expiry applies to web users only. API users do not go through the invitation flow.
+</Note>
+
+## Resending an invitation
+
+If the invitee did not receive the email or the link has expired:
+
+<Steps>
+  <Step title="Find the user">
+    Navigate to **Users** and search for the user by name or email. Their status will show as **invited**.
+  </Step>
+  <Step title="Resend the invitation">
+    Open the user record and click **Resend invitation email**. A new invitation token is generated and a fresh email is sent.
+  </Step>
+</Steps>
+
+<CardGroup cols={2}>
+  <Card title="Users and roles" href="/user-management/users-and-roles">
+    Role capabilities and user account types.
+  </Card>
+  <Card title="Two-step verification" href="/user-management/two-step-verification">
+    2SV requirements enforced at invitation time.
+  </Card>
+</CardGroup>

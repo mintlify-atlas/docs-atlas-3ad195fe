@@ -1,0 +1,107 @@
+---
+title: "GET /api/users"
+description: "Look up one or more Signon users by their UUIDs."
+---
+
+Returns user details for the given UUIDs. Results are scoped to users that exist in Signon; unrecognised UUIDs are silently omitted from the response.
+
+## Authentication
+
+Requires a Bearer token issued to an API user with access to the **Signon API** application. See [API overview](/api/overview) for setup instructions.
+
+```bash
+Authorization: Bearer YOUR_BEARER_TOKEN
+```
+
+## Request
+
+```
+GET /api/users?uuids[]=<uuid>
+```
+
+### Query parameters
+
+<ParamField query="uuids[]" type="string[]" required>
+  One or more user UUIDs to look up. Repeat the parameter for each UUID.
+
+  ```
+  ?uuids[]=c514c7e0-a049-013d-c537-3209197caa3b&uuids[]=d8f3a1b2-...
+  ```
+</ParamField>
+
+## Example request
+
+```bash
+curl --location --globoff \
+  'https://SIGNON_DOMAIN/api/users?uuids[]=c514c7e0-a049-013d-c537-3209197caa3b' \
+  --header 'Authorization: Bearer YOUR_BEARER_TOKEN'
+```
+
+## Response
+
+Returns a JSON array of user objects. The array is empty if none of the requested UUIDs match known users.
+
+### Example response
+
+```json
+[
+  {
+    "uid": "c514c7e0-a049-013d-c537-3209197caa3b",
+    "name": "Jane Smith",
+    "email": "jane.smith@example.gov.uk",
+    "organisation": {
+      "content_id": "d4d0b72a-0d0b-4c6e-87f1-2b0e1f4e9abc",
+      "name": "Department for Example",
+      "slug": "department-for-example"
+    }
+  }
+]
+```
+
+If a user has no organisation, the `organisation` field is `null`.
+
+### Response fields
+
+<ResponseField name="uid" type="string" required>
+  The user's UUID. Matches the UUID supplied in the request.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  The user's full name.
+</ResponseField>
+
+<ResponseField name="email" type="string" required>
+  The user's email address.
+</ResponseField>
+
+<ResponseField name="organisation" type="object | null" required>
+  The organisation the user belongs to, or `null` if the user has no organisation.
+
+  <Expandable title="properties">
+    <ResponseField name="content_id" type="string">
+      The organisation's content ID (a UUID from the GOV.UK content store).
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      The organisation's display name.
+    </ResponseField>
+    <ResponseField name="slug" type="string">
+      The organisation's URL slug.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Error responses
+
+| Status | Cause |
+|--------|-------|
+| `401 Unauthorized` | Token is missing, invalid, or not associated with the Signon API application |
+
+<Warning>
+  Unknown UUIDs do not produce an error — they are silently excluded from the results. Always verify that the returned array contains the users you expected.
+</Warning>
+
+## Notes
+
+<Note>
+  Only query for UUIDs you have a legitimate need to look up. The API returns full user details including email addresses and organisation membership.
+</Note>

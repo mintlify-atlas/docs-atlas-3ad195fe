@@ -1,0 +1,154 @@
+---
+title: "Troubleshooting"
+description: "Workarounds for common Signon problems, including password reset emails and Rails console access."
+---
+
+## Password reset emails
+
+When a user account is created, Signon sends them a link to set their password. A similar email is sent when users request a password reset. If a user reports not receiving one of these emails, follow the steps below.
+
+### New user account
+
+As a superadmin user, find the user in Signon and press the **Resend invitation email** button. This generates a new invitation and sends it immediately.
+
+### Existing user requesting a reset
+
+The user can request a new password reset link themselves via the [password reset form](https://signon.publishing.service.gov.uk/users/password/new). Direct them there first before escalating.
+
+### If the email still does not arrive
+
+<AccordionGroup>
+  <Accordion title="Check the GOV.UK Notify dashboard (preferred)">
+    This method does not require opening a Rails console on a production system.
+
+    If the email was sent in the last 7 days, search for the user's email address in the [GOV.UK Notify dashboard](https://www.notifications.service.gov.uk/services/51c6b7b7-f7dc-421c-9105-7b73774cfb43).
+
+    The dashboard shows delivery status, so you can tell whether:
+    - the email was never dispatched (a configuration or code error)
+    - delivery was attempted but rejected (invalid address, spam filter)
+    - the email was delivered but the user cannot find it
+
+    <Note>
+      The Notify dashboard only retains 7 days of message history. For older issues you will need to use the Rails console method.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Generate a reset link via the Rails console">
+    Use this method when the Notify dashboard shows no record of the email or the 7-day window has passed.
+
+    <Steps>
+      <Step title="Open a Rails console">
+        Configure your [EKS access](https://docs.publishing.service.gov.uk/kubernetes/cheatsheet.html#set-your-aws-environment-and-role), then run:
+
+        ```bash
+        kubectl exec -it deploy/signon -- rails c
+        ```
+      </Step>
+      <Step title="Generate a reset token">
+        ```ruby
+        token = User.find_by(email: "name@example.com").send_reset_password_instructions
+        ```
+
+        This also sends the reset email. If you only need the token without triggering a new email, use Devise's `set_reset_password_token` method instead.
+      </Step>
+      <Step title="Construct the reset URL">
+        Combine the token with the environment's base URL:
+
+        ```
+        https://signon.publishing.service.gov.uk/users/password/edit?reset_password_token=<token>
+        ```
+
+        Send this URL directly to the user over a secure channel.
+      </Step>
+    </Steps>
+
+    <Warning>
+      Treat the reset token as a credential. Do not share it in public channels or include it in non-secure communications.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Opening a Rails console in Kubernetes
+
+Most production investigations that cannot be resolved through the Signon UI require a Rails console. Always prefer read-only queries and avoid mutating data unless following a documented runbook.
+
+```bash
+kubectl exec -it deploy/signon -- rails c
+```
+
+<Note>
+  You must configure EKS access for the target environment before running the command above. See the [Kubernetes cheatsheet](https://docs.publishing.service.gov.uk/kubernetes/cheatsheet.html#set-your-aws-environment-and-role).
+</Note>
+
+Common read-only queries:
+
+```ruby
+# Find a user by email
+User.find_by(email: "name@example.com")
+
+# List users who signed in within the last 90 days
+User.last_signed_in_after(90.days.ago).count
+
+# Check whether a user has access to an application
+user = User.find_by(email: "name@example.com")
+user.application_permissions.map { |p| p.application.name }
+```
+
+---
+
+## Common issues
+
+<AccordionGroup>
+  <Accordion title="User is suspended and cannot sign in">
+    Suspended users cannot authenticate. To restore access, use the Signon UI (superadmin required) or the Rake task:
+
+    ```bash
+    email=name@example.com bundle exec rake users:unsuspend
+    ```
+
+    On Kubernetes:
+
+    ```bash
+    kubectl exec -it deploy/signon -- bundle exec rake users:unsuspend email=name@example.com
+    ```
+  </Accordion>
+
+  <Accordion title="User is locked out after too many failed sign-in attempts">
+    Devise locks accounts after repeated failed attempts. A superadmin can unlock the account from the Signon UI. Alternatively, unlock via the Rails console:
+
+    ```ruby
+    User.find_by(email: "name@example.com").unlock_access!
+    ```
+  </Accordion>
+
+  <Accordion title="Organisations are out of date or missing">
+    Organisations are synced nightly from Whitehall. To force an immediate sync:
+
+    ```bash
+    kubectl exec -it deploy/signon -- bundle exec rake organisations:fetch
+    ```
+
+    If an organisation is still missing after the sync, check that it exists and is published in Whitehall first. Signon will not create organisations that are not present in the Whitehall API response.
+  </Accordion>
+
+  <Accordion title="API user token is expiring soon">
+    The `access_tokens:renew_expiring_internal_tokens` task automatically renews tokens for internal (`@alphagov.co.uk` and `@publishing.service.gov.uk`) API users that expire within one month. For other tokens, renew them manually via the Signon UI under **API Users**.
+
+    After renewing, synchronise the new token to Kubernetes secrets:
+
+    ```bash
+    kubectl exec -it deploy/signon -- bundle exec rake kubernetes:sync_token_secrets
+    ```
+  </Accordion>
+
+  <Accordion title="Healthcheck/ready returns a non-200 response">
+    `GET /healthcheck/ready` checks both the ActiveRecord database connection and the SidekiqRedis connection. A failure means one of these backing services is unavailable or unreachable.
+
+    Check that:
+    - The MySQL database is running and the connection string is correct.
+    - Redis is running and accessible from the Signon pod.
+    - No pending database migrations are blocking ActiveRecord (`bundle exec rails db:migrate:status`).
+  </Accordion>
+</AccordionGroup>

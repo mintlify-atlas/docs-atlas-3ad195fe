@@ -1,0 +1,155 @@
+---
+title: "Users and roles"
+description: "An overview of user account types, roles, statuses, and how to find and manage users in Signon."
+---
+
+Signon manages two distinct types of user account and five roles that control what each user can do across GOV.UK publishing applications.
+
+## Account types
+
+| Type | Purpose |
+| --- | --- |
+| **Web user** | A human who signs in interactively through a browser. Subject to 2-step verification, inactivity suspension, and invitation flows. |
+| **API user** | A machine account used by one application to call another. Not subject to 2SV or inactivity suspension. Created under "API Users" in the Signon UI. |
+
+<Note>
+API users authenticate via bearer tokens, not passwords. See the API users documentation for how to create access tokens.
+</Note>
+
+## Roles
+
+Roles are hierarchical. A role can only manage users at the same level or below in the hierarchy.
+
+| Role | Internal name | Level | Requires 2SV in production |
+| --- | --- | --- | --- |
+| Superadmin | `superadmin` | 0 (highest) | Yes |
+| Admin (GOV.UK admin) | `admin` | 1 | Yes |
+| Super organisation admin | `super_organisation_admin` | 2 | Yes |
+| Organisation admin (publishing manager) | `organisation_admin` | 3 | Yes |
+| User | `normal` | 4 (lowest) | No |
+
+### Superadmin
+
+Full access to everything in Signon. Can:
+
+- Create, edit, suspend, and delete any user or API user
+- Assign any role including superadmin
+- Manage all applications and their supported permissions
+- Grant or revoke access to any application for any user
+- Manage all organisations
+- View event logs for any user
+
+### Admin (GOV.UK admin)
+
+Broad administrative access. Can do everything a superadmin can do **except**:
+
+- Assign the superadmin role (admins cannot elevate a user to superadmin)
+- Change their own role
+
+Admins can manage users across all organisations, grant application access, and set permissions without restriction.
+
+### Super organisation admin
+
+A publishing manager with cross-organisation scope. Can:
+
+- Manage users in their own organisation and any of its sub-organisations
+- Grant or revoke delegated application permissions for those users
+- Cannot invite new users (invitations are restricted to GOV.UK admins)
+
+The set of manageable organisations is the subtree rooted at the super organisation admin's own organisation.
+
+### Organisation admin (publishing manager)
+
+A publishing manager scoped to a single organisation. Can:
+
+- Manage users within their own organisation only
+- Grant or revoke delegated application permissions for those users
+- Cannot invite new users
+
+<Warning>
+Organisation admins must belong to an organisation. Signon will reject saving an organisation admin account without an `organisation_id`.
+</Warning>
+
+### User (normal)
+
+A standard account with no administrative capabilities. Can:
+
+- Sign in to applications they have been granted access to
+- Manage their own account settings, password, and 2SV setup
+- Cannot manage other users or change any permissions
+
+## User statuses
+
+A user's status is derived from the state of their account fields, evaluated in priority order:
+
+| Status | Meaning |
+| --- | --- |
+| `suspended` | Account has been manually or automatically suspended. User cannot sign in. |
+| `invited` | Invitation sent but not yet accepted (web users only). |
+| `locked` | Account locked after too many failed password or 2SV attempts. |
+| `active` | Account is none of the above: in good standing. |
+
+<Note>
+API users do not go through the invitation flow, so they are never shown as `invited`.
+</Note>
+
+## Finding and editing a user
+
+<Steps>
+  <Step title="Open the Users list">
+    Navigate to **Users** in the top navigation. The list shows all users you have permission to manage.
+  </Step>
+  <Step title="Filter the list">
+    Use the filter panel to narrow results by name or email (partial match supported), role, organisation, status, and 2SV status. Multiple filters can be combined.
+  </Step>
+  <Step title="Open the user record">
+    Click a user's name or email to open their record. If you are editing your own account, you will be redirected to the account settings page instead.
+  </Step>
+  <Step title="Edit the user">
+    Click **Edit** to change the user's name, email, organisation, role, or 2SV requirement. Editable fields depend on your own role.
+  </Step>
+  <Step title="Save changes">
+    Click **Update user**. A confirmation notice is shown and the change is recorded in the event log.
+  </Step>
+</Steps>
+
+## Filtering users
+
+The Users index supports the following filter dimensions:
+
+| Filter | Options |
+| --- | --- |
+| Name / email | Free-text partial match |
+| Role | superadmin, admin, super\_organisation\_admin, organisation\_admin, normal |
+| Organisation | Any organisation in Signon |
+| Status | active, suspended, invited, locked |
+| 2SV status | enabled, not\_set\_up, exempted |
+
+You can export the filtered list as a CSV by selecting the CSV download option. The export includes each user's application permissions.
+
+## Event logs
+
+Every significant action taken on a user account is recorded in the event log.
+
+<Steps>
+  <Step title="Open a user record">
+    Navigate to **Users** and click on the user.
+  </Step>
+  <Step title="View event log">
+    Click **View event log** on the user's page. Events are shown in reverse-chronological order, 100 per page.
+  </Step>
+</Steps>
+
+Logged events include sign-ins, password changes, permission changes, 2SV setup and resets, suspension/unsuspension, and account locking.
+
+<CardGroup cols={2}>
+  <Card title="Inviting users" href="/user-management/invitations">
+    How to invite a single user or bulk-invite via CSV.
+  </Card>
+  <Card title="Suspensions and unlocking" href="/user-management/suspensions-and-unlocking">
+    How to suspend, unsuspend, or unlock an account.
+  </Card>
+  <Card title="Two-step verification" href="/user-management/two-step-verification">
+    Managing 2SV requirements, resets, and exemptions.
+  </Card>
+</CardGroup>

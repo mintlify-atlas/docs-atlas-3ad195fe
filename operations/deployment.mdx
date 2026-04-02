@@ -1,0 +1,138 @@
+---
+title: "Deployment"
+description: "How to build, run, and operate Signon in production and local development environments."
+---
+
+Signon is a Ruby on Rails application that runs on Puma, uses MySQL for persistent storage, and relies on Redis and Sidekiq for background job processing.
+
+## Docker image
+
+The production image is built from the project's `Dockerfile` using a two-stage build.
+
+```dockerfile
+# Builder stage — installs gems, compiles assets
+FROM ghcr.io/alphagov/govuk-ruby-builder:3.4 AS builder
+
+# Runtime stage — minimal image, no build tools
+FROM ghcr.io/alphagov/govuk-ruby-base:3.4
+CMD ["puma"]
+```
+
+The base images are maintained at [alphagov/govuk-ruby-images](https://github.com/alphagov/govuk-ruby-images) and pin Ruby 3.4 by default.
+
+### Building the image
+
+```bash
+docker build -t signon .
+```
+
+## Required services
+
+Signon requires the following backing services to be available at start-up.
+
+| Service | Purpose |
+|---------|---------|
+| MySQL (via `mysql2` gem) | Primary database — ActiveRecord models |
+| Redis | Sidekiq queue and volatile lock storage |
+
+<Note>
+  The `DATABASE_URL` and `REDIS_URL` environment variables (or Rails credentials) must be set before starting the application.
+</Note>
+
+## Web server
+
+Signon uses [Puma](https://puma.io) as its web server. The `CMD` in the Dockerfile starts Puma directly:
+
+```bash
+bundle exec puma
+```
+
+## Background jobs
+
+Long-running and deferred work is processed by [Sidekiq](https://sidekiq.org), which connects to Redis.
+
+Start a Sidekiq worker alongside the web process:
+
+```bash
+bundle exec sidekiq
+```
+
+## Health check endpoints
+
+Two health check endpoints are exposed for use by load-balancers and Kubernetes readiness probes.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /healthcheck/live` | Liveness — confirms the process is running |
+| `GET /healthcheck/ready` | Readiness — checks ActiveRecord and SidekiqRedis connectivity |
+
+## Environment variables
+
+All required environment variables are documented in [Environment variables](/environment-variables). Key variables needed at boot include:
+
+| Variable | Purpose |
+|----------|---------|
+| `DEVISE_PEPPER` | Devise password encryption salt |
+| `DEVISE_SECRET_KEY` | Devise secret key |
+| `GOVUK_ENVIRONMENT` | Environment name (`production`, `staging`, etc.) |
+| `GOVUK_NOTIFY_API_KEY` | GOV.UK Notify API key for sending emails |
+| `GOVUK_NOTIFY_TEMPLATE_ID` | Notify email template ID |
+| `ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY` | ActiveRecord encryption key |
+| `ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT` | ActiveRecord encryption derivation salt |
+
+## Local development
+
+GOV.UK uses [GOV.UK Docker](https://github.com/alphagov/govuk-docker) to run Signon locally alongside its dependencies.
+
+<Steps>
+  <Step title="Clone and set up GOV.UK Docker">
+    Follow the [GOV.UK Docker setup guide](https://github.com/alphagov/govuk-docker#setup) to install the tool and start the shared services (MySQL, Redis).
+  </Step>
+  <Step title="Start Signon">
+    ```bash
+    govuk-docker up signon-app
+    ```
+  </Step>
+  <Step title="Configure OAuth for local development">
+    If you have not set real OAuth tokens in your app's environment, seed the database with development OAuth credentials:
+
+    ```bash
+    bundle exec ./script/make_oauth_work_in_dev
+    ```
+  </Step>
+  <Step title="Run a dependent app with real SSO">
+    Set `GDS_SSO_STRATEGY=real` when starting the consuming application:
+
+    ```bash
+    GDS_SSO_STRATEGY=real bundle exec rails s
+    ```
+  </Step>
+</Steps>
+
+## Running the test suite
+
+The default Rake task runs linting, JavaScript tests, and the Rails test suite:
+
+```bash
+bundle exec rake
+```
+
+## Kubernetes deployment
+
+Signon is deployed to GOV.UK's Kubernetes cluster via [govuk-helm-charts](https://github.com/alphagov/govuk-helm-charts).
+
+To run one-off commands against a deployed instance, use `kubectl exec`:
+
+```bash
+kubectl exec -it deploy/signon -- bundle exec rake <task>
+```
+
+To open an interactive Rails console on the deployed pod:
+
+```bash
+kubectl exec -it deploy/signon -- rails c
+```
+
+<Note>
+  You must [configure your EKS access](https://docs.publishing.service.gov.uk/kubernetes/cheatsheet.html#set-your-aws-environment-and-role) before running `kubectl` commands against production or staging clusters.
+</Note>

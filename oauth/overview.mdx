@@ -1,0 +1,99 @@
+---
+title: "OAuth2 overview"
+description: "How Signon implements OAuth2 to provide single sign-on across GOV.UK admin and editorial applications."
+---
+
+Signon is the GOV.UK single sign-on service. It uses OAuth2 to authenticate users and authorise client applications to retrieve user details and permissions.
+
+The OAuth2 provider is built on the [Doorkeeper](https://rubygems.org/gems/doorkeeper) Ruby gem, based on [draft v22 of the OAuth 2 specification](http://tools.ietf.org/html/draft-ietf-oauth-v2-22).
+
+<Note>
+  Signon deliberately tracks a fixed version of the specification rather than each incremental draft. When the specification reaches a formal RFC, this will be revisited.
+</Note>
+
+## OAuth roles
+
+OAuth2 defines four roles. Here is how each maps to Signon.
+
+### Resource owner
+
+The resource owner role is divided in two:
+
+- **End-user** — the person who owns the credentials (username and password).
+- **GDS administrator** — the person who owns the permissions associated with the account. Permissions are the resource being shared with client applications.
+
+### Resource server
+
+The **Signon application** acts as the resource server. The resource it holds is the set of permissions associated with a user account.
+
+### Client
+
+The **GOV.UK admin and editorial applications** are the OAuth clients. Examples include Whitehall Publisher, Content Publisher, and Maslow.
+
+### Authorization server
+
+The **Signon application** also acts as the authorization server, issuing and validating access tokens.
+
+## Authentication flows
+
+Signon supports two distinct flows depending on who is making the request.
+
+<CardGroup cols={2}>
+  <Card title="Authorization Code flow" icon="user" href="/oauth/authorization-flow">
+    For end-users signing in interactively through a browser. The standard Authorization Code grant type defined in OAuth2 section 5.1.
+  </Card>
+  <Card title="Bearer token flow" icon="key" href="/oauth/access-tokens">
+    For API clients and service-to-service requests. An access token is issued in advance and sent as a Bearer token with each request.
+  </Card>
+</CardGroup>
+
+## The gds-sso library
+
+Most GOV.UK Ruby applications integrate with Signon through [gds-sso](https://github.com/alphagov/gds-sso), a Ruby library that standardises the OAuth2 integration, handles token refresh, and manages permission synchronisation callbacks.
+
+While the OAuth2 flow can be implemented directly against the Doorkeeper endpoints, using gds-sso is strongly recommended for consistency.
+
+## Client registration
+
+Client credentials are created by developers using the `applications:create` rake task. Credentials are distributed to applications through configuration files that are not shared publicly.
+
+```bash
+rake applications:create name=ClientName \
+  description="What does this app do" \
+  home_uri="https://myapp.com" \
+  redirect_uri="https://myapp.com/auth/gds/callback"
+```
+
+This returns a `client_id` and `client_secret`. Per section 3.1 of the spec, the client type is **confidential** — credentials can be maintained securely — and the client kind is **web application**.
+
+Credentials are sent in the HTTP request body, not in the `Authorization` header:
+
+```http
+POST /oauth/token HTTP/1.1
+Host: signon.example.com
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+
+grant_type=authorization_code&client_id=s6BhdRkqt3&client_secret=7Fjfp0ZBr1KtDRbnfVdmIw&code=SplxlOBeZQQYbYS6WxSbIA
+```
+
+<Warning>
+  Because client authentication involves a password, the authorization server must protect all token endpoints against brute force attacks.
+</Warning>
+
+## Security
+
+### HTTPS only
+
+Signon is intended for use exclusively over HTTPS. All related applications operate solely over HTTPS. HTTP redirect URIs are rejected in non-development environments.
+
+### CSRF protection
+
+The `state` parameter is **required** in all authorization requests to mitigate cross-site request forgery. Signon does not accept authorization requests that omit it.
+
+### No token scopes
+
+Signon does not use OAuth2 access token scopes. Authorization is controlled entirely through the application-specific permission sets stored against each user account.
+
+### Credential generation
+
+Access tokens, refresh tokens, client IDs, and client secrets are generated using Ruby's `SecureRandom` module — a random hex string of length 32. Where OpenSSL is available it is used for cryptographic randomness; otherwise `/dev/urandom` is used. GDS servers are configured with OpenSSL available.

@@ -1,80 +1,127 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Register an application, obtain OAuth credentials, and get your first user authenticated through Signon."
 ---
 
-## Get started in three steps
+This guide walks you through registering an application with Signon, configuring your application to use the credentials, and granting a user access.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+All commands must be run inside the [GOV.UK Docker environment](https://github.com/alphagov/govuk-docker). Signon requires access to its database and other services that Docker provides.
+</Note>
 
-### Step 1: Set up your local environment
+## Register your application
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Create the application record">
+    Run the `applications:create` rake task from the Signon repository, substituting your application's details:
 
-### Step 2: Deploy your changes
+    ```bash
+    bundle exec rake applications:create \
+      name="My App" \
+      description="A publishing tool for GOV.UK" \
+      home_uri="https://my-app.dev.gov.uk" \
+      redirect_uri="https://my-app.dev.gov.uk/auth/gds/callback"
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    The task creates the application record in Signon's database and prints the OAuth credentials:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```
+    Application 'My App' created.
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    config.oauth_id     = 'abc123def456...'
+    config.oauth_secret = 'xyz789uvw012...'
+    ```
 
-### Step 3: Go live
+    <Warning>
+    The client secret is only shown once. Copy it immediately and store it securely — for example in your application's Kubernetes secrets or a secrets manager.
+    </Warning>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Set the OAuth credentials in your application">
+    Add the client ID and secret to your application's environment:
+
+    ```bash
+    export OAUTH_ID="abc123def456..."
+    export OAUTH_SECRET="xyz789uvw012..."
+    ```
+
+    In production environments, inject these as secrets rather than plain environment variables. The [gds-sso](https://github.com/alphagov/gds-sso) gem reads `OAUTH_ID` and `OAUTH_SECRET` automatically.
+  </Step>
+
+  <Step title="Configure your application for local development">
+    If you do not yet have real OAuth tokens configured, run the following script from the Signon repository to seed your local database with development OAuth credentials that match the defaults used by GOV.UK applications in development mode:
+
+    ```bash
+    bundle exec ./script/make_oauth_work_in_dev
+    ```
+
+    Then start your application with the `GDS_SSO_STRATEGY` environment variable set to `real`:
+
+    ```bash
+    GDS_SSO_STRATEGY=real bundle exec rails s
+    ```
+
+    <Tip>
+    Without `GDS_SSO_STRATEGY=real`, the gds-sso gem uses a stub strategy that bypasses Signon entirely. Set it to `real` to use the full OAuth flow in development.
+    </Tip>
+  </Step>
+</Steps>
+
+## Invite your first user
+
+<Steps>
+  <Step title="Sign in to Signon as a superadmin">
+    Open Signon in your browser and sign in with a superadmin account. In the GOV.UK Docker environment, a superadmin user is seeded automatically.
+  </Step>
+
+  <Step title="Invite the user">
+    1. Click **Users** in the navigation.
+    2. Click **Invite user**.
+    3. Enter the user's name and email address.
+    4. Click **Send invitation email**.
+
+    Signon sends an invitation email to the address you provided. The user follows the link to set their password and activate their account.
+  </Step>
+
+  <Step title="Grant the user access to your application">
+    After the user's account is active:
+
+    1. Find the user in **Users** and click **Edit**.
+    2. Click **Manage permissions** next to your application.
+    3. Enable the **signin** permission.
+    4. Click **Update permissions**.
+
+    The user can now sign in to your application through Signon.
+
+    <Note>
+    Without the `signin` permission, users are redirected back to Signon with an access denied error even if they have a valid session. Always grant `signin` explicitly.
+    </Note>
+  </Step>
+</Steps>
+
+## Verify the integration
+
+Open your application in a browser. You should be redirected to Signon's sign-in page. After signing in, Signon redirects you back to your application's callback URL (`/auth/gds/callback`) and your application creates a session.
+
+If the redirect does not happen, check that:
+
+- `OAUTH_ID` and `OAUTH_SECRET` match the values printed by the rake task.
+- The `redirect_uri` registered in Signon exactly matches the callback URL your application uses.
+- `GDS_SSO_STRATEGY=real` is set if you are running in development mode.
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Environment variables" icon="sliders" href="/environment-variables">
+    Full reference for all environment variables required by Signon.
+  </Card>
+  <Card title="API users and tokens" icon="terminal" href="/applications/api-users-and-tokens">
+    Create Bearer tokens for service-to-service API authentication.
+  </Card>
+  <Card title="Permissions" icon="key" href="/applications/permissions">
+    Define and manage custom application permissions.
+  </Card>
+  <Card title="User roles" icon="user-shield" href="/user-management/users-and-roles">
+    Understand the role hierarchy and what each role can do.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

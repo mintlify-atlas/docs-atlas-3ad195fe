@@ -1,0 +1,75 @@
+---
+title: "Organisations"
+description: "How GOV.UK departments and arms-length bodies are managed in Signon and how they affect user permissions."
+---
+
+Organisations in Signon represent GOV.UK departments and arms-length bodies. Each user account is assigned to an organisation, and that membership determines what publishing managers can see and manage.
+
+## Canonical source: Whitehall
+
+Organisations are not created directly in Signon. Whitehall is the canonical source of organisation data. Signon imports organisations from Whitehall using a rake task:
+
+```bash
+rake organisations:fetch
+```
+
+This task calls the Whitehall API, retrieves the complete list of organisations and their relationships, and updates Signon to match. New organisations are created, existing ones are updated, and the parent-child hierarchy is synchronised.
+
+<Tip>
+If you need an organisation to exist in Signon, add it in Whitehall first and then let the nightly import pick it up — or run `rake organisations:fetch` manually.
+</Tip>
+
+## Nightly import
+
+On deployed environments the `organisations:fetch` task runs automatically every night at 11pm via a Jenkins job configured in [govuk-puppet](https://github.com/alphagov/govuk-puppet). You do not need to run it manually under normal circumstances.
+
+## Organisation hierarchy
+
+Whitehall allows an organisation to have multiple parent organisations. Signon only supports a single parent. When Signon imports an organisation that has multiple parents in Whitehall, it sets the parent to whichever one appears last in the Whitehall API response.
+
+<Note>
+If the parent relationship for an organisation is wrong in Signon, correct it in Whitehall and wait for the next nightly import (or run `rake organisations:fetch` manually).
+</Note>
+
+## Requiring 2-step verification for an organisation
+
+You can require all users in an organisation to set up 2-step verification (2SV). Once enabled, any user in that organisation who does not have 2SV configured will be prompted to set it up on their next sign-in.
+
+<Steps>
+  <Step title="Open Organisations">
+    Go to **Organisations** in the navigation. You need the **Superadmin** or **Admin** role.
+  </Step>
+  <Step title="Edit the organisation">
+    Click **Edit** next to the organisation.
+  </Step>
+  <Step title="Enable 2SV requirement">
+    Tick **Require 2-step verification** and click **Save**.
+  </Step>
+</Steps>
+
+## Assigning users to organisations
+
+A user's organisation is set on their account. When inviting or editing a user, select their organisation from the **Organisation** dropdown.
+
+Users can belong to only one organisation. If a user moves between organisations, update their account to reflect the new organisation.
+
+## How organisation membership affects publishing managers
+
+Publishing managers — users with the **Super organisation admin** or **Organisation admin** role — can only manage users within their own organisation (and, for Super organisation admins, child organisations).
+
+This means:
+
+- A publishing manager can only grant or revoke application access for users in their organisation.
+- They can only grant permissions that are marked as [delegated](/applications/permissions#delegated-permissions) on the relevant application.
+- They cannot see or manage users from other organisations.
+
+Organisation hierarchy matters here: a Super organisation admin who manages a parent organisation can also manage users in all child organisations. An Organisation admin only manages users in their own organisation.
+
+<CardGroup cols={2}>
+  <Card title="Application permissions" href="/applications/permissions">
+    Understand delegated permissions and how publishing managers can grant them.
+  </Card>
+  <Card title="Registering applications" href="/applications/registering-applications">
+    Register a new OAuth client application in Signon.
+  </Card>
+</CardGroup>

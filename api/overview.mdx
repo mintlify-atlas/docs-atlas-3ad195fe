@@ -1,0 +1,82 @@
+---
+title: "API overview"
+description: "Signon exposes a lightweight REST API for user lookups alongside standard OAuth2 endpoints, all secured with Bearer tokens."
+---
+
+Signon provides two categories of HTTP endpoints:
+
+- A **user lookup API** (`/api/users`) for retrieving user details by UUID, authenticated with a Bearer token issued to an API-only application.
+- **OAuth2 endpoints** (provided by [Doorkeeper](https://rubygems.org/gems/doorkeeper)) used by client applications to authenticate end-users.
+
+## Authentication
+
+All API requests are authenticated with a **Bearer token** passed in the `Authorization` header:
+
+```bash
+Authorization: Bearer YOUR_BEARER_TOKEN
+```
+
+Bearer tokens are issued to API users who have been granted access to the **Signon API** application. Requests without a valid token receive a `401 Unauthorized` response.
+
+## Setting up API access
+
+<Steps>
+  <Step title="Create the Signon API application">
+    Run the following rake task on the Signon server to register the API-only application:
+
+    ```bash
+    rake applications:create name="Signon API" description="API endpoints for user management in Signon" \
+      home_uri="https://signon.integration.publishing.service.gov.uk" \
+      redirect_uri="https://signon.integration.publishing.service.gov.uk" \
+      api_only="true"
+    ```
+
+    <Note>
+      Replace the `home_uri` and `redirect_uri` values with the correct domain for your environment.
+    </Note>
+  </Step>
+  <Step title="Create an API user">
+    In the Signon admin UI, create a new API user account that will be used to authenticate API requests.
+  </Step>
+  <Step title="Grant access to the Signon API application">
+    Grant the API user access to the **Signon API** application you created in step 1.
+  </Step>
+  <Step title="Note the Bearer token">
+    After granting access, a Bearer token is shown once. Copy and store it securely — it cannot be retrieved again.
+  </Step>
+</Steps>
+
+## Base URL
+
+```
+https://SIGNON_DOMAIN
+```
+
+Replace `SIGNON_DOMAIN` with the hostname of your Signon instance (for example, `signon.integration.publishing.service.gov.uk`).
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/users` | Look up one or more users by UUID |
+| `GET` | `/user` | OAuth user info — returns permissions for the authenticated user |
+| `POST` | `/oauth/authorize` | OAuth2 authorization endpoint |
+| `POST` | `/oauth/token` | OAuth2 token endpoint |
+| `GET` | `/healthcheck/live` | Liveness probe |
+| `GET` | `/healthcheck/ready` | Readiness probe (checks database and Redis) |
+
+## Error responses
+
+| Status | Meaning |
+|--------|---------|
+| `401 Unauthorized` | Missing token, invalid token, or token not associated with the Signon API application |
+
+## OAuth2 integration
+
+For integrating a client application with Signon's OAuth2 flow, see the [gds-sso](https://github.com/alphagov/gds-sso) Ruby library, which standardises the integration for GOV.UK applications.
+
+OAuth2 access tokens expire after **7200 seconds (2 hours)**. Clients must handle token refresh.
+
+<Tip>
+  For API-to-API requests, tokens are issued in advance through the Signon admin UI and sent as Bearer tokens on each request. For end-user browser flows, Signon uses the **Authorization Code grant type**. See [Authorization Code flow](/oauth/authorization-flow) for details.
+</Tip>
